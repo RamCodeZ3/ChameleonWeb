@@ -1,3 +1,6 @@
 export default defineBackground(() => {
-  console.log('Hello background!', { id: browser.runtime.id });
+  browser.action.onClicked.addListener(async (tab) => {
+    if (!tab.id) return;
+    await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_PICKER' });
+  });
 });

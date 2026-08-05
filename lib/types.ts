@@ -1,26 +1,24 @@
-export type Category = 'background' | 'text' | 'primary' | 'secondary';
-export type ColorProperty = 'color' | 'backgroundColor' | 'borderColor';
-
-export interface ColorSwatch {
-  rgb: string;
-  hex: string;
-  count: number;
+export interface EditableStyles {
+  color?: string;
+  backgroundColor?: string;
+  fontSize?: string;
+  fontFamily?: string;
+  fontWeight?: string;
+  lineHeight?: string;
+  textAlign?: string;
+  width?: string;
+  height?: string;
+  padding?: string;
+  margin?: string;
+  borderRadius?: string;
+  borderWidth?: string;
+  borderColor?: string;
+  borderStyle?: string;
 }
 
-export interface PaletteResult {
-  background: ColorSwatch[];
-  text: ColorSwatch[];
-  primary: ColorSwatch[];
-  secondary: ColorSwatch[];
-}
+export type StyleKey = keyof EditableStyles;
 
-export type ScanMessage = { type: 'SCAN' };
-export type ApplyOverrideMessage = {
-  type: 'APPLY_OVERRIDE';
-  category: Category;
-  rgb: string;
-  newColor: string;
-};
-export type ResetMessage = { type: 'RESET' };
+// selector -> rules for that selector
+export type SiteStyles = Record<string, EditableStyles>;
 
-export type ExtensionMessage = ScanMessage | ApplyOverrideMessage | ResetMessage;
+export type ToggleMessage = { type: 'TOGGLE_PICKER' };

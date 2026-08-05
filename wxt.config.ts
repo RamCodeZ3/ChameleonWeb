@@ -7,7 +7,9 @@ export default defineConfig({
   manifest: {
     name: 'ChameleonWeb',
     description: 'Extract and preview color palettes on any website',
-    permissions: ['activeTab'],
+    permissions: ['activeTab', 'storage'],
+    host_permissions: ['<all_urls>'],
+    action: {},
   },
   webExt: {
     chromiumBinary: '/usr/bin/brave-browser',
