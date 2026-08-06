@@ -6,6 +6,7 @@ interface PickerState {
   hoverRect: DOMRect | null;
   selectedSelector: string | null;
   siteStyles: SiteStyles;
+  position: { x: number; y: number } | null;
 }
 
 let state: PickerState = {
@@ -13,6 +14,7 @@ let state: PickerState = {
   hoverRect: null,
   selectedSelector: null,
   siteStyles: {},
+  position: null,
 };
 
 const listeners = new Set<() => void>();
