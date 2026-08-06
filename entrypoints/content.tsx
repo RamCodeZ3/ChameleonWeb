@@ -31,29 +31,75 @@ export default defineContentScript({
 
     const shadowHostEl = ui.shadowHost;
 
+    // Etiquetas raíz/contenedoras que nunca se deben poder seleccionar.
+    const IGNORED_TAGS = ['BODY', 'HTML', 'HEAD', 'SCRIPT', 'STYLE'];
+
     function isClickInsideUi(e: MouseEvent): boolean {
       return e.composedPath().includes(shadowHostEl);
+    }
+
+    // getBoundingClientRect() devuelve un DOMRect cuyas propiedades (top,
+    // left, width, height) viven en el prototipo, no en la instancia. Si se
+    // hace `{...rect}` en otro lado (como al redimensionar en Panel.tsx) el
+    // resultado queda vacío y el recuadro "salta" a 0,0. Por eso siempre lo
+    // convertimos a un objeto plano antes de guardarlo en el store.
+    function rectToPlainObject(rect: DOMRect) {
+      return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+    }
+
+    // En vez de usar e.target (que puede resolver a BODY/HTML, o al propio
+    // overlay del picker si hay elementos superpuestos), recorremos toda la
+    // pila de elementos en ese punto -de más arriba a más abajo- y devolvemos
+    // el primero que sea un elemento real de la página. Esto evita
+    // seleccionar contenedores raíz y también "atraviesa" nuestra propia UI
+    // si por algún motivo queda en el medio.
+    function getElementAtPoint(x: number, y: number): HTMLElement | null {
+      const stack = document.elementsFromPoint(x, y);
+      for (const el of stack) {
+        if (el === shadowHostEl) continue;
+        if (IGNORED_TAGS.includes(el.tagName)) continue;
+        return el as HTMLElement;
+      }
+      return null;
+    }
+
+    function clearSelection() {
+      setState({ hoverRect: null, selectedSelector: null, selectedElement: null } as any);
     }
 
     function handleMouseMove(e: MouseEvent) {
       if (!getState().active) return;
       if (isClickInsideUi(e)) return;
-      const target = e.target as Element;
-      setState({ hoverRect: target.getBoundingClientRect() });
+      // Una vez que hay un elemento seleccionado, dejamos de seguir el
+      // mouse: si no, el rectángulo (y sus puntos de anclaje) se movían a
+      // cualquier elemento que quedara bajo el cursor mientras el usuario
+      // simplemente intentaba usar el panel.
+      if (getState().selectedSelector) return;
+      const target = getElementAtPoint(e.clientX, e.clientY);
+      if (!target) return;
+      setState({ hoverRect: rectToPlainObject(target.getBoundingClientRect()) });
     }
 
     function handleClick(e: MouseEvent) {
       if (!getState().active) return;
       if (isClickInsideUi(e)) return;
-      const target = e.target as Element;
+      const target = getElementAtPoint(e.clientX, e.clientY);
+      if (!target) return;
       e.preventDefault();
       e.stopPropagation();
-      setState({ selectedSelector: getUniqueSelector(target) });
+      // El click siempre fija (o cambia) la selección, aunque ya hubiera
+      // una anterior: así se puede elegir otro elemento sin cerrar el panel.
+      setState({
+        selectedSelector: getUniqueSelector(target),
+        selectedElement: target,
+        hoverRect: rectToPlainObject(target.getBoundingClientRect()),
+      } as any);
     }
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        setState({ active: false, hoverRect: null });
+        setState({ active: false } as any);
+        clearSelection();
       }
     }
 
@@ -63,7 +109,9 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener((message: ToggleMessage) => {
       if (message.type === 'TOGGLE_PICKER') {
-        setState({ active: !getState().active });
+        const nextActive = !getState().active;
+        setState({ active: nextActive } as any);
+        if (!nextActive) clearSelection();
       }
     });
   },
