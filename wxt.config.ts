@@ -2,7 +2,7 @@ import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  modules: ['@wxt-dev/module-react'],
+  modules: ['@wxt-dev/module-react', '@wxt-dev/auto-icons'],
   vite: () => ({ plugins: [tailwindcss()] }),
   manifest: {
     name: 'ChameleonWeb',
