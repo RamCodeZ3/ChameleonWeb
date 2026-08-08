@@ -10,6 +10,8 @@ import {
   RotateCcw,
   ChevronDown,
   MousePointerClick,
+  Download,
+  Trash2,
   Type,
   Palette,
   Ruler,
@@ -27,6 +29,33 @@ const MARGIN = 16;
 // Se usa tanto en clases de Tailwind como en los estilos inline del
 // recuadro de selección que se dibuja directamente sobre la página.
 const ACCENT = '#8b5cf6';
+
+// Propiedades "de texto" que, al cambiarlas en el elemento seleccionado,
+// también se aplican a sus descendientes. CSS ya hereda muchas de estas
+// por defecto, pero si algún hijo tiene su propio valor (por una regla más
+// específica del sitio original) esta regla explícita lo sobrescribe, que
+// es lo que se espera al decir "cambié el color y el hijo no cambió".
+const INHERITABLE_KEYS = new Set([
+  'color',
+  'fontFamily',
+  'fontSize',
+  'fontWeight',
+  'fontStyle',
+  'lineHeight',
+  'letterSpacing',
+  'textAlign',
+  'textDecoration',
+  'textTransform',
+  'whiteSpace',
+]);
+
+// Propiedades de tamaño del contenedor. Acá NO tiene sentido copiar el mismo
+// ancho/alto a cada hijo (eso rompería el layout, todos quedarían del mismo
+// tamaño). Lo "inteligente" es evitar que el contenido se desborde del
+// nuevo tamaño: los hijos directos no exceden el ancho del contenedor, y
+// los elementos de medios (imágenes/video/svg) se reescalan manteniendo
+// proporción en vez de quedar recortados o estirados.
+const RESIZE_KEYS = new Set(['width', 'height']);
 
 function defaultPosition() {
   return {
@@ -89,6 +118,61 @@ export default function Panel() {
     setOpenSections([]);
   }, [state.selectedSelector]);
 
+  // El recuadro de selección se dibuja con position:fixed usando las
+  // coordenadas que tenía el elemento en el momento del click. Si la
+  // página hace scroll, esas coordenadas quedan desactualizadas y el
+  // recuadro se "despega" del elemento real. Este efecto reubica el
+  // recuadro en cada scroll/resize, y si el elemento seleccionado queda
+  // totalmente fuera de la ventana visible, oculta el recuadro (no lo
+  // deja "flotando" donde ya no hay nada que mostrar). La selección en sí
+  // se mantiene: si volvés a scrollear hasta el elemento, el recuadro
+  // reaparece solo.
+  useEffect(() => {
+    const selectedEl = (state as any).selectedElement as HTMLElement | null;
+    if (!state.active || !selectedEl) return;
+
+    let raf: number | null = null;
+
+    function sync() {
+      if (!selectedEl.isConnected) {
+        // El elemento fue removido del DOM (por ejemplo, la página se
+        // volvió a renderizar): ya no hay nada que seleccionar.
+        setState({ hoverRect: null, selectedSelector: null, selectedElement: null } as any);
+        return;
+      }
+      const rect = selectedEl.getBoundingClientRect();
+      const fueraDeVista =
+        rect.bottom <= 0 ||
+        rect.top >= window.innerHeight ||
+        rect.right <= 0 ||
+        rect.left >= window.innerWidth;
+
+      setState({
+        hoverRect: fueraDeVista
+          ? null
+          : { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+      } as any);
+    }
+
+    function onScrollOrResize() {
+      if (raf !== null) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        sync();
+      });
+    }
+
+    // capture:true para detectar scroll de CUALQUIER contenedor scrolleable
+    // de la página, no solo el scroll de la ventana.
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+      if (raf !== null) cancelAnimationFrame(raf);
+    };
+  }, [state.active, (state as any).selectedElement]);
+
   if (!state.active) return null;
 
   const position = state.position ?? defaultPosition();
@@ -99,8 +183,49 @@ export default function Panel() {
     await saveSiteStyles(getState().siteStyles);
   }
 
+  // Aplica un estilo a CUALQUIER selector (no solo al seleccionado), para
+  // poder escribir reglas adicionales como ".selector *" (hijos) sin
+  // depender de una función del store que no conocemos de antemano.
+  function updateStyleForSelector(selector: string, key: string, value: string) {
+    const current = getState().siteStyles;
+    setState({
+      siteStyles: {
+        ...current,
+        [selector]: { ...(current[selector] || {}), [key]: value },
+      },
+    });
+  }
+
   function handleChange(key: any, value: string) {
+    if (!state.selectedSelector) return;
+    const selector = state.selectedSelector;
+
     updateSelectedStyle(key, value);
+
+    if (INHERITABLE_KEYS.has(key)) {
+      // Cascada a los hijos: mismo valor para todos los descendientes,
+      // así el cambio de color/tipografía se ve también en las etiquetas hijas.
+      updateStyleForSelector(`${selector} *`, key, value);
+    }
+
+    if (RESIZE_KEYS.has(key)) {
+      // Ajuste inteligente: en vez de forzar el mismo ancho/alto a cada
+      // hijo (rompería el layout), evitamos que el contenido se desborde
+      // del nuevo tamaño del contenedor.
+      updateStyleForSelector(selector, 'boxSizing', 'border-box');
+      updateStyleForSelector(`${selector} > *`, 'maxWidth', '100%');
+      updateStyleForSelector(
+        `${selector} img, ${selector} video, ${selector} svg, ${selector} canvas`,
+        'maxWidth',
+        '100%'
+      );
+      updateStyleForSelector(
+        `${selector} img, ${selector} video, ${selector} svg, ${selector} canvas`,
+        'height',
+        'auto'
+      );
+    }
+
     setTimeout(persist, 0);
   }
 
@@ -118,6 +243,58 @@ export default function Panel() {
     delete next[state.selectedSelector];
     setState({ siteStyles: next });
     setTimeout(persist, 0);
+  }
+
+  // Resetea TODOS los estilos modificados en la página, no solo los del
+  // elemento seleccionado. Es destructivo, así que pedimos confirmación.
+  function handleResetAll() {
+    const confirmado = window.confirm(
+      '¿Restablecer todos los estilos modificados en esta página? Esta acción no se puede deshacer.'
+    );
+    if (!confirmado) return;
+    setState({ siteStyles: {}, selectedSelector: null, selectedElement: null, hoverRect: null } as any);
+    setTimeout(persist, 0);
+  }
+
+  // Descarga el HTML completo de la página actual, con los estilos nuevos
+  // incrustados en un <style> dentro del <head>, y sin nuestra propia UI.
+  function handleDownloadHtml() {
+    const css = buildCssText(getState().siteStyles);
+    const clone = document.documentElement.cloneNode(true) as HTMLElement;
+
+    // Quitamos el panel/recuadro de selección y el host del shadow root de
+    // nuestra propia extensión para que no aparezcan en el archivo exportado.
+    clone.querySelectorAll('[data-css-editor-panel="true"]').forEach((el) => el.remove());
+    clone.querySelectorAll('css-live-editor-ui').forEach((el) => el.remove());
+
+    const styleTag = document.createElement('style');
+    styleTag.id = 'css-live-editor-export';
+    styleTag.textContent = css;
+
+    const head = clone.querySelector('head');
+    (head ?? clone).appendChild(styleTag);
+
+    const html = `<!DOCTYPE html>\n${clone.outerHTML}`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+
+    const safeName =
+      (document.title || 'pagina').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') ||
+      'pagina';
+
+    const a = document.createElement('a');
+    // Mismo atributo que usa el resto de la UI del editor: así el listener
+    // global de selección (en content.tsx) lo reconoce como "parte de
+    // nuestra propia interfaz" y no le cancela el click, aunque este <a>
+    // viva fuera del shadow root (necesita estar en document.body para
+    // que el navegador dispare la descarga correctamente).
+    a.setAttribute('data-css-editor-panel', 'true');
+    a.href = url;
+    a.download = `${safeName}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // --- Lógica de arrastre del Panel ---
@@ -355,7 +532,7 @@ export default function Panel() {
           </button>
         </div>
 
-        <div className="overflow-y-auto">
+        <div className="overflow-y-auto flex-1">
           {!state.selectedSelector && (
             <div className="flex flex-col items-center text-center gap-2 px-4 py-10 text-zinc-500">
               <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center">
@@ -465,7 +642,7 @@ export default function Panel() {
                 })}
               </div>
 
-              {/* Acciones */}
+              {/* Acciones sobre el elemento seleccionado */}
               <div className="flex gap-2 px-3 pb-3">
                 <button
                   onClick={handleCopyCss}
@@ -479,11 +656,29 @@ export default function Panel() {
                   className="flex-1 flex items-center justify-center gap-1.5 bg-white/5 hover:bg-white/10 text-zinc-300 rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
                 >
                   <RotateCcw size={12} />
-                  Reset
+                  Reset elemento
                 </button>
               </div>
             </>
           )}
+        </div>
+
+        {/* Pie fijo: acciones globales, siempre visibles (no dependen de tener un elemento seleccionado) */}
+        <div className="flex gap-2 px-3 py-2.5 border-t border-white/5 bg-zinc-950">
+          <button
+            onClick={handleDownloadHtml}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-white/5 hover:bg-white/10 text-zinc-300 rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
+          >
+            <Download size={12} />
+            Descargar HTML
+          </button>
+          <button
+            onClick={handleResetAll}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
+          >
+            <Trash2 size={12} />
+            Reset página
+          </button>
         </div>
       </div>
     </>
