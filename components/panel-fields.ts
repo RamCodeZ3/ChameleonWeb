@@ -1,46 +1,59 @@
 import type { StyleKey } from '@/lib/types';
-
 export interface FieldDef {
-  key: StyleKey;
-  label: string;
-  type: 'color' | 'text' | 'select' | 'number';
-  options?: string[];
+ key: StyleKey;
+ label: string;
+ type: 'color' | 'text' | 'select' | 'number';
+ options?: string[];
 }
-
 export const SECTIONS: { title: string; fields: FieldDef[] }[] = [
-  {
-    title: 'Tamaño',
-    fields: [
-      { key: 'width', label: 'Ancho', type: 'number' },
-      { key: 'height', label: 'Alto', type: 'number' },
-    ],
-  },
-  {
-    title: 'Tipografía',
-    fields: [
-      { key: 'fontFamily', label: 'Fuente', type: 'text' },
-      { key: 'fontSize', label: 'Tamaño de texto', type: 'number' },
-      { key: 'fontWeight', label: 'Grosor', type: 'select', options: ['normal', 'bold', '300', '500', '700', '900'] },
-      { key: 'lineHeight', label: 'Interlineado', type: 'text' },
-      { key: 'textAlign', label: 'Alineación', type: 'select', options: ['left', 'center', 'right', 'justify'] },
-      { key: 'color', label: 'Color de texto', type: 'color' },
-    ],
-  },
-  {
-    title: 'Fondo y bordes',
-    fields: [
-      { key: 'backgroundColor', label: 'Fondo', type: 'color' },
-      { key: 'borderColor', label: 'Color de borde', type: 'color' },
-      { key: 'borderWidth', label: 'Grosor de borde', type: 'number' },
-      { key: 'borderStyle', label: 'Estilo de borde', type: 'select', options: ['none', 'solid', 'dashed', 'dotted'] },
-      { key: 'borderRadius', label: 'Radio de esquina', type: 'number' },
-    ],
-  },
-  {
-    title: 'Espaciado',
-    fields: [
-      { key: 'padding', label: 'Padding (todos los lados)', type: 'number' },
-      { key: 'margin', label: 'Margin (todos los lados)', type: 'number' },
-    ],
-  },
+ {
+  title: 'Size',
+  fields: [
+   { key: 'width', label: 'Width', type: 'number' },
+   { key: 'height', label: 'Height', type: 'number' },
+  ],
+ },
+ {
+  title: 'Typography',
+  fields: [
+   { key: 'fontFamily', label: 'Font', type: 'text' },
+   { key: 'fontSize', label: 'Font size', type: 'number' },
+   {
+    key: 'fontWeight',
+    label: 'Weight',
+    type: 'select',
+    options: ['normal', 'bold', '300', '500', '700', '900'],
+   },
+   { key: 'lineHeight', label: 'Line height', type: 'text' },
+   {
+    key: 'textAlign',
+    label: 'Alignment',
+    type: 'select',
+    options: ['left', 'center', 'right', 'justify'],
+   },
+   { key: 'color', label: 'Text color', type: 'color' },
+  ],
+ },
+ {
+  title: 'Background & borders',
+  fields: [
+   { key: 'backgroundColor', label: 'Background', type: 'color' },
+   { key: 'borderColor', label: 'Border color', type: 'color' },
+   { key: 'borderWidth', label: 'Border width', type: 'number' },
+   {
+    key: 'borderStyle',
+    label: 'Border style',
+    type: 'select',
+    options: ['none', 'solid', 'dashed', 'dotted'],
+   },
+   { key: 'borderRadius', label: 'Corner radius', type: 'number' },
+  ],
+ },
+ {
+  title: 'Spacing',
+  fields: [
+   { key: 'padding', label: 'Padding (all sides)', type: 'number' },
+   { key: 'margin', label: 'Margin (all sides)', type: 'number' },
+  ],
+ },
 ];
