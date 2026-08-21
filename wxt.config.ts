@@ -6,7 +6,7 @@ export default defineConfig({
  vite: () => ({ plugins: [tailwindcss()] }),
  manifest: {
   name: 'ChameleonWeb',
-  description: 'Extract and preview color palettes on any website',
+  description: 'ChameleonWeb is a browser extension that lets you create CSS style prototypes in real time without having to use DevTools.',
   permissions: ['activeTab', 'storage'],
   host_permissions: ['<all_urls>'],
   action: {},
